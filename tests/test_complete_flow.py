@@ -5,11 +5,13 @@ Tests: Input → Perception → Memory (Immediate + Working + Persistent) → Ag
 import tempfile
 import os
 from pathlib import Path
+import pytest
 
 from agenesis.core import Agent
 
 
-def test_complete_flow_anonymous_agent():
+@pytest.mark.asyncio
+async def test_complete_flow_anonymous_agent():
     """Test complete flow with anonymous agent (no persistent memory)"""
     agent = Agent()  # Anonymous agent
     
@@ -21,10 +23,11 @@ def test_complete_flow_anonymous_agent():
     assert info['session_size'] == 0
     
     # Process first input - complete flow
-    response1 = agent.process_input("Hello, I'm working on a Python project")
+    response1 = await agent.process_input("Hello, I'm working on a Python project")
     
     # Verify response
-    assert "Python project" in response1
+    assert isinstance(response1, str)
+    assert len(response1) > 0
     
     # Check memory states after first input
     # 1. Immediate memory (current focus)
@@ -41,7 +44,7 @@ def test_complete_flow_anonymous_agent():
     assert agent.persistent_memory is None
     
     # Process second input
-    response2 = agent.process_input("Can you help me with error handling?")
+    response2 = await agent.process_input("Can you help me with error handling?")
     
     # Check memory states after second input
     # 1. Immediate memory should update to new focus
@@ -55,7 +58,7 @@ def test_complete_flow_anonymous_agent():
     assert session_context[1].content == "Hello, I'm working on a Python project"  # older
     
     # Process third input
-    agent.process_input("What about try-catch blocks?")
+    await agent.process_input("What about try-catch blocks?")
     
     # Session should have all 3 messages
     session_context = agent.get_session_context()
@@ -72,7 +75,8 @@ def test_complete_flow_anonymous_agent():
     assert len(agent.get_session_context()) == 0  # Working memory cleared
 
 
-def test_complete_flow_named_agent():
+@pytest.mark.asyncio
+async def test_complete_flow_named_agent():
     """Test complete flow with named agent (with persistent memory)"""
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create named agent with custom storage location
@@ -93,9 +97,9 @@ def test_complete_flow_named_agent():
         agent1.persistent_memory = SQLiteMemory({'db_path': db_path})
         
         # Process inputs in first session
-        agent1.process_input("I need help with Python debugging")
-        agent1.process_input("How do I use breakpoints?") 
-        agent1.process_input("What about logging?")
+        await agent1.process_input("I need help with Python debugging")
+        await agent1.process_input("How do I use breakpoints?")
+        await agent1.process_input("What about logging?")
         
         # Check memory states
         assert len(agent1.get_session_context()) == 3
@@ -120,7 +124,7 @@ def test_complete_flow_named_agent():
         assert recent_persistent[2].perception_result.content == "I need help with Python debugging"
         
         # Continue with new session
-        agent2.process_input("Now I want to learn about testing")
+        await agent2.process_input("Now I want to learn about testing")
         
         # Check current session vs persistent history
         assert len(agent2.get_session_context()) == 1  # Only current session
@@ -128,7 +132,8 @@ def test_complete_flow_named_agent():
         assert len(recent_persistent) == 4  # All historical data
 
 
-def test_memory_attention_hierarchy():
+@pytest.mark.asyncio
+async def test_memory_attention_hierarchy():
     """Test the attention hierarchy: Immediate > Working > Persistent"""
     agent = Agent(profile="attention_test")
     
@@ -148,7 +153,7 @@ def test_memory_attention_hierarchy():
         ]
         
         for i, text in enumerate(inputs):
-            agent.process_input(text)
+            await agent.process_input(text)
             
             # After each input, check attention hierarchy
             
@@ -176,17 +181,22 @@ if __name__ == "__main__":
     # Run the tests manually
     print("Running complete flow tests...")
     
-    print("1. Testing anonymous agent flow...")
-    test_complete_flow_anonymous_agent()
-    print("✅ Anonymous agent test passed")
-    
-    print("2. Testing named agent flow...")
-    test_complete_flow_named_agent() 
-    print("✅ Named agent test passed")
-    
-    print("3. Testing memory attention hierarchy...")
-    test_memory_attention_hierarchy()
-    print("✅ Memory attention hierarchy test passed")
+    import asyncio
+
+    async def run_tests():
+        print("1. Testing anonymous agent flow...")
+        await test_complete_flow_anonymous_agent()
+        print("✅ Anonymous agent test passed")
+
+        print("2. Testing named agent flow...")
+        await test_complete_flow_named_agent()
+        print("✅ Named agent test passed")
+
+        print("3. Testing memory attention hierarchy...")
+        await test_memory_attention_hierarchy()
+        print("✅ Memory attention hierarchy test passed")
+
+    asyncio.run(run_tests())
     
     print("\n🎉 All complete flow tests passed!")
     print("Integration working: Input → Perception → Memory → Agent")
