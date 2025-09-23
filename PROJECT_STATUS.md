@@ -13,6 +13,7 @@
 ### ✅ **Infrastructure (100% Complete)**
 - **LLM Providers** - OpenAI and Anthropic support
 - **Agent Profiles** - Anonymous vs named agent persistence
+- **Project Knowledge Import** - Long-term project support via memory integration
 - **Comprehensive Testing** - 100+ tests across all modules
 - **Project Structure** - Clean, modular architecture
 
@@ -76,6 +77,12 @@ agenesis/
 - **Multi-Provider Support** - OpenAI and Anthropic
 - **Graceful Fallback** - Heuristic mode when no LLM
 - **Async Processing** - Non-blocking API calls
+
+### **5. Project Knowledge Management**
+- **Documentation Import** - Pre-load project requirements, architecture, and context
+- **Memory Integration** - Project docs stored as enhanced memories with high retrieval priority
+- **Cross-session Persistence** - Project knowledge survives across all sessions
+- **Unified Retrieval** - Natural access to both project docs and conversation history
 
 ## 📋 **Usage Examples**
 

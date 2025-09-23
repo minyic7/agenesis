@@ -138,6 +138,38 @@ class MemoryEvolutionSource:
 3. **Enhanced Persistence**: Mark valuable insights as "evolved knowledge" 
 4. **Retrieval Priority**: Evolved knowledge gets higher reliability during retrieval
 
+### Project Knowledge Integration
+The evolution system supports both conversational learning and imported project knowledge, treating both as enhanced memories with different learning contexts.
+
+**Dual Learning Sources:**
+1. **Conversational Learning**: Real-time analysis of user interactions for preferences and patterns
+2. **Project Knowledge**: Pre-imported documentation and context marked as evolved knowledge
+
+**Enhanced Memory Classification:**
+```python
+# Conversation-derived evolved knowledge
+conversation_memory = MemoryRecord(
+    context={'source_type': 'conversation', 'learning_type': 'preference'},
+    is_evolved_knowledge=True,
+    evolution_metadata={'learning_context': 'user_preference'},
+    reliability_multiplier=1.3  # Learned from interaction
+)
+
+# Project knowledge imported as evolved memory
+project_memory = MemoryRecord(
+    context={'source_type': 'project_knowledge', 'document_type': 'requirements'},
+    is_evolved_knowledge=True,
+    evolution_metadata={'learning_context': 'project_documentation'},
+    reliability_multiplier=1.5  # Pre-verified important knowledge
+)
+```
+
+**Unified Evolution Approach:**
+- **Same storage format**: Both types use MemoryRecord with evolution metadata
+- **Same retrieval boost**: reliability_multiplier enhances both conversation learning and project docs
+- **Complementary learning**: Project knowledge provides context, conversations provide personalization
+- **Consistent behavior**: Cognition module treats both as high-priority memories
+
 ### Data Structures:
 
 #### **EvolutionDecision**

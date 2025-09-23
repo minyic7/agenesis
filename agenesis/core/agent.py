@@ -153,6 +153,135 @@ class Agent:
         
         # Persistent memory remains for next session
     
+    async def import_project_knowledge(self, knowledge_sources: list) -> Dict[str, Any]:
+        """Import project documentation and knowledge into persistent memory
+        
+        Args:
+            knowledge_sources: List of dicts with 'content', 'type', 'importance', 'boost' keys
+            
+        Returns:
+            Dict with import results
+        """
+        if not self.has_persistent_memory:
+            raise ValueError("Project knowledge import requires a named agent profile")
+        
+        imported_count = 0
+        skipped_count = 0
+        results = []
+        
+        for source in knowledge_sources:
+            try:
+                # Extract source information
+                content = source.get('content', '')
+                doc_type = source.get('type', 'general')
+                importance = source.get('importance', 'medium')
+                reliability_boost = source.get('boost', 1.3)
+                
+                if not content.strip():
+                    skipped_count += 1
+                    continue
+                
+                # Process content through perception (without persona context for raw docs)
+                perception_result = self.perception.process(content, context=None)
+                
+                # Create project knowledge context
+                project_context = {
+                    'source_type': 'project_knowledge',
+                    'document_type': doc_type,
+                    'importance': importance,
+                    'imported_at': perception_result.timestamp.isoformat(),
+                    'content_summary': content[:200] + '...' if len(content) > 200 else content
+                }
+                
+                # Store in persistent memory
+                memory_id = self.persistent_memory.store(perception_result, project_context)
+                
+                # Retrieve and enhance as evolved knowledge
+                record = self.persistent_memory.retrieve(memory_id)
+                if record:
+                    record.is_evolved_knowledge = True
+                    record.reliability_multiplier = reliability_boost
+                    record.evolution_metadata = {
+                        'knowledge_summary': f"{doc_type.title()} documentation",
+                        'learning_context': 'project_documentation',
+                        'future_relevance': f"Relevant for {doc_type} decisions and planning",
+                        'imported_at': perception_result.timestamp.isoformat()
+                    }
+                    
+                    # Re-store the enhanced record
+                    self.persistent_memory.store(record.perception_result, record.context)
+                
+                imported_count += 1
+                results.append({
+                    'type': doc_type,
+                    'size': len(content),
+                    'importance': importance,
+                    'boost': reliability_boost,
+                    'memory_id': memory_id
+                })
+                
+            except Exception as e:
+                skipped_count += 1
+                results.append({
+                    'type': source.get('type', 'unknown'),
+                    'error': str(e)
+                })
+        
+        return {
+            'imported_count': imported_count,
+            'skipped_count': skipped_count,
+            'total_sources': len(knowledge_sources),
+            'results': results
+        }
+    
+    async def import_from_files(self, file_paths: list, default_type: str = 'documentation') -> Dict[str, Any]:
+        """Convenience method to import project knowledge from files
+        
+        Args:
+            file_paths: List of file paths or dicts with 'path', 'type', 'importance', 'boost'
+            default_type: Default document type if not specified
+            
+        Returns:
+            Dict with import results
+        """
+        knowledge_sources = []
+        
+        for file_spec in file_paths:
+            try:
+                if isinstance(file_spec, str):
+                    # Simple file path
+                    file_path = file_spec
+                    doc_type = default_type
+                    importance = 'medium'
+                    boost = 1.3
+                else:
+                    # Dict with specifications
+                    file_path = file_spec['path']
+                    doc_type = file_spec.get('type', default_type)
+                    importance = file_spec.get('importance', 'medium')
+                    boost = file_spec.get('boost', 1.3)
+                
+                # Read file content
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                knowledge_sources.append({
+                    'content': content,
+                    'type': doc_type,
+                    'importance': importance,
+                    'boost': boost,
+                    'source_file': file_path
+                })
+                
+            except Exception as e:
+                knowledge_sources.append({
+                    'content': '',
+                    'type': file_spec.get('type', 'unknown') if isinstance(file_spec, dict) else 'unknown',
+                    'error': f"Failed to read {file_path if 'file_path' in locals() else 'file'}: {e}"
+                })
+        
+        return await self.import_project_knowledge(knowledge_sources)
+
     def get_profile_info(self) -> Dict[str, Any]:
         """Get information about current agent profile"""
         return {

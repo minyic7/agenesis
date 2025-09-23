@@ -122,3 +122,6 @@ scratch_*.py
 api_keys.txt
 secrets.txt
 keys/
+
+# Demo scripts (for development testing)
+demos/
