@@ -164,34 +164,57 @@ class Agent:
         
         # 5. Action generation (with optional persona context)
         action_result = await self.action.generate_response(cognition_result, persona_context)
-        
-        # 6. Evolution analysis (if persistent memory available)
+
+        # 6. Evolution analysis with full interaction context (if persistent memory available)
         if self.has_persistent_memory:
-            evolution_decision = await self.evolution.analyze_memory_session(
-                self.immediate_memory, self.working_memory
+            # Check if this interaction should be learned from using validation functions
+            should_learn = self.evolution._should_learn_from_interaction(
+                text_input,
+                action_result.response_text,
+                self.persona
             )
-            
-            if evolution_decision.should_persist:
-                print(f"🧠 Learning detected: {evolution_decision.learning_description}")
-                
-                # Create evolved knowledge metadata
-                evolved_metadata = self.evolution.create_evolved_knowledge_metadata(evolution_decision)
-                
-                # Mark recent memories as evolved knowledge and store
-                recent_memories = self.working_memory.get_recent(3)
-                for memory in recent_memories:
-                    memory.is_evolved_knowledge = True
-                    memory.evolution_metadata = {
-                        "knowledge_summary": evolved_metadata.knowledge_summary,
-                        "learning_context": evolved_metadata.learning_context,
-                        "future_relevance": evolved_metadata.future_relevance,
-                        "evolved_at": evolved_metadata.evolved_at.isoformat()
-                    }
-                    memory.reliability_multiplier = evolved_metadata.reliability_boost
-                    
-                    # Store enhanced memory in persistent storage
-                    self.persistent_memory.store(memory.perception_result, memory.context)
-        
+
+            if should_learn:
+                # Run LLM evolution analysis with persona learning preferences
+                evolution_decision = await self.evolution.analyze_memory_session(
+                    self.immediate_memory, self.working_memory, self.persona
+                )
+
+                if evolution_decision.should_persist:
+                    print(f"🧠 Learning detected: {evolution_decision.learning_description}")
+
+                    # Create evolved knowledge metadata
+                    evolved_metadata = self.evolution.create_evolved_knowledge_metadata(evolution_decision)
+
+                    # Create new enhanced memory records with complete interaction context
+                    recent_memories = self.working_memory.get_recent(3)
+                    for memory in recent_memories:
+                        # Create new enhanced memory record for persistent storage
+                        from ..memory.base import MemoryRecord
+                        from datetime import datetime, timezone
+
+                        enhanced_memory = MemoryRecord(
+                            id="",  # Generate new ID for evolved knowledge version
+                            perception_result=memory.perception_result,
+                            stored_at=datetime.now(timezone.utc),
+                            context=memory.context,
+                            metadata=memory.metadata,
+                            is_evolved_knowledge=True,
+                            evolution_metadata={
+                                "knowledge_summary": evolved_metadata.knowledge_summary,
+                                "learning_context": evolved_metadata.learning_context,
+                                "future_relevance": evolved_metadata.future_relevance,
+                                "evolved_at": evolved_metadata.evolved_at.isoformat()
+                            },
+                            embedding=memory.embedding,
+                            agent_response=action_result.response_text  # Complete interaction
+                        )
+
+                        # Store enhanced memory record with complete interaction in persistent storage
+                        self.persistent_memory.store_record(enhanced_memory)
+            else:
+                print("📋 Interaction filtered out by validation function")
+
         # 7. Return the response text to user
         return action_result.response_text
     

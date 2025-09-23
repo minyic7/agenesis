@@ -44,3 +44,43 @@ context_template:
     - "Consider scalability and maintainability in your recommendations"
     - "Break down complex problems into manageable steps"
     - "Suggest both immediate fixes and long-term improvements"
+
+# Learning behavior configuration
+learning_preferences:
+  # What types of knowledge should this persona learn about the user?
+  learn_about:
+    - "technical_expertise"      # Languages, frameworks, tools they use
+    - "problem_patterns"         # Types of issues they commonly face
+    - "learning_style"           # How they prefer explanations
+    - "project_context"          # What they're working on
+    - "experience_level"         # Their skill level in different areas
+    - "debugging_approaches"     # How they like to troubleshoot
+
+  # What should this persona ignore/not learn?
+  ignore_topics:
+    - "personal_life"           # Keep it professional
+    - "casual_conversation"     # Don't learn from small talk
+    - "one_off_questions"       # Focus on patterns, not single queries
+    - "weather_talk"            # Irrelevant to technical mentoring
+
+  # How aggressive should learning be?
+  learning_aggressiveness: "moderate"  # conservative/moderate/aggressive
+
+  # Custom learning instructions for LLM
+  evolution_instructions: |
+    Focus on learning technical patterns and preferences that will help
+    provide better mentoring. Pay special attention to:
+    - Programming languages and frameworks the user works with
+    - Types of technical challenges they face repeatedly
+    - Their preferred explanation style (code examples vs theory)
+    - Architecture patterns they use or want to learn
+    - Development workflows and tooling preferences
+    - Areas where they need guidance vs areas of expertise
+
+    Ignore casual conversation and personal topics unless directly
+    related to their technical development. Only learn from interactions
+    where the user engaged meaningfully with technical content.
+
+  # Optional: User-defined validation function (placeholder for future implementation)
+  validation:
+    interaction_function: "my_custom_validators.should_learn_technical_interaction"

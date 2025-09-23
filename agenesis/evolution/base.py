@@ -10,7 +10,6 @@ class EvolutionDecision:
     should_persist: bool  # Whether this session contains valuable learning (default: False)
     learning_type: Optional[str] = None  # pattern, preference, knowledge, skill
     learning_description: Optional[str] = None  # What was learned
-    confidence: float = 0.0  # How confident the LLM is about this learning
     future_application: Optional[str] = None  # How this could help in future interactions
     rejection_reason: Optional[str] = None  # Why learning was rejected (if should_persist=False)
 
@@ -21,7 +20,6 @@ class EvolvedKnowledge:
     knowledge_summary: str  # What valuable knowledge was identified
     learning_context: str  # The context in which this was learned
     future_relevance: str  # When this knowledge would be useful
-    reliability_boost: float  # How much this increases retrieval priority (e.g., 1.5x)
     evolved_at: Optional[datetime] = None  # When this knowledge was identified
     
     def __post_init__(self):

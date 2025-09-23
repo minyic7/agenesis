@@ -22,6 +22,9 @@ class MemoryRecord:
 
     # Semantic search support
     embedding: Optional[List[float]] = None  # OpenAI embedding for semantic search
+
+    # Full interaction context (when learning occurs)
+    agent_response: Optional[str] = None  # Agent's response to the user input
     
     def __post_init__(self):
         if not self.id:

@@ -77,6 +77,10 @@ class BasePersona(ABC):
         """Get persona description"""
         return self.description
 
+    def get_learning_preferences(self) -> Optional[Dict[str, Any]]:
+        """Get learning preferences configuration"""
+        return self.config.get('learning_preferences')
+
 
 class DefaultPersona(BasePersona):
     """Default persona implementation using YAML configuration"""

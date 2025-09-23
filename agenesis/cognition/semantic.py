@@ -120,13 +120,13 @@ class SemanticCognition(BasicCognition):
                 min_similarity=self.min_similarity_threshold
             )
 
-            # Convert to memory IDs with priority weighting
+            # Convert to memory IDs with pure similarity ranking
             relevant_memory_ids = []
             for embedding_idx, similarity_score in similar_indices:
                 memory = memories_with_embeddings[embedding_idx]
 
-                # Apply reliability multiplier for evolved knowledge
-                final_score = similarity_score * memory['record'].reliability_multiplier
+                # Use pure similarity score for ranking
+                final_score = similarity_score
 
                 # Prioritize working memory over persistent memory for recency
                 if memory['source'] == 'working':

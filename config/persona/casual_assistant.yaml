@@ -37,3 +37,35 @@ context_template:
     - "Use everyday examples when possible"
     - "Be warm and approachable"
     - "Avoid overly technical jargon"
+
+# Learning behavior configuration
+learning_preferences:
+  # What types of knowledge should this persona learn about the user?
+  learn_about:
+    - "communication_style"      # How they like to interact
+    - "interests_and_hobbies"    # What they're passionate about
+    - "help_preferences"         # How they like to receive assistance
+    - "life_context"            # General background that helps conversation
+    - "learning_preferences"     # How they prefer to learn new things
+
+  # What should this persona ignore/not learn?
+  ignore_topics:
+    - "sensitive_personal_info"  # Don't store private details
+    - "temporary_emotions"       # Don't learn from bad moods
+    - "one_time_events"         # Focus on patterns, not single events
+
+  # How aggressive should learning be?
+  learning_aggressiveness: "conservative"  # More careful with personal info
+
+  # Custom learning instructions for LLM
+  evolution_instructions: |
+    Learn about communication preferences and general interests that help
+    maintain friendly, helpful conversations. Focus on:
+    - How the user prefers to communicate (formal vs casual, detail level)
+    - General interests and topics they enjoy discussing
+    - Types of help and explanations that work best for them
+    - Their typical context (student, professional, hobbyist, etc.)
+
+    Be conservative about learning personal information. Only store patterns
+    that will genuinely help future conversations be more helpful and friendly.
+    Avoid learning temporary emotional states or overly personal details.

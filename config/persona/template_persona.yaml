@@ -1,0 +1,78 @@
+# Template Persona Configuration
+# Copy this file and customize it for your specific use case
+
+name: "your_persona_name"
+description: "Brief description of this persona's role and purpose"
+
+# Response behavior configuration (existing persona system)
+context_template:
+  focus_areas:
+    - "area_1"           # What this persona focuses on
+    - "area_2"           # e.g., "technical_solutions", "friendly_engagement"
+    - "area_3"
+
+  priority_signals:
+    - "keyword_1"        # Words that indicate high priority
+    - "keyword_2"        # e.g., "urgent", "help", "error"
+    - "keyword_3"
+
+  relevance_boosts:
+    topic_1: 1.3         # Boost certain topics in memory retrieval
+    topic_2: 1.4         # e.g., "debugging_steps: 1.3"
+
+  reasoning_approach: "your_approach"  # e.g., "systematic_problem_solving"
+
+  decision_criteria:
+    - "criterion_1"      # What this persona values
+    - "criterion_2"      # e.g., "technical_correctness", "user_friendliness"
+
+  response_structure: "your_structure"  # e.g., "analysis_then_solution"
+  include_examples: true
+  detail_level: "normal"              # minimal/normal/comprehensive
+
+  system_additions:
+    - "Instruction 1 for how this persona should behave"
+    - "Instruction 2"
+    - "Use appropriate tone and style for your persona"
+
+# Learning behavior configuration (new enhancement)
+learning_preferences:
+  # What types of knowledge should this persona learn about the user?
+  learn_about:
+    - "user_preferences"     # What patterns to learn
+    - "domain_knowledge"     # e.g., "technical_expertise", "communication_style"
+    - "interaction_patterns" # e.g., "problem_patterns", "learning_style"
+
+  # What should this persona ignore/not learn?
+  ignore_topics:
+    - "irrelevant_topic_1"   # Topics to avoid learning
+    - "irrelevant_topic_2"   # e.g., "personal_life", "casual_conversation"
+
+  # How aggressive should learning be?
+  learning_aggressiveness: "moderate"  # conservative/moderate/aggressive
+
+  # Custom learning instructions for the LLM
+  evolution_instructions: |
+    Specific instructions for what this persona should learn and how to
+    evaluate learning opportunities. For example:
+
+    Learn about user preferences and patterns that will help provide
+    better assistance in this persona's domain. Focus on:
+    - Specific patterns relevant to your persona's purpose
+    - User preferences that affect how you should respond
+    - Context that helps future interactions be more effective
+
+    Ignore casual conversation unless it reveals important context.
+    Only learn from interactions where meaningful engagement occurred.
+
+  # Optional: User-defined validation functions (advanced users)
+  # validation:
+  #   interaction_function: "my_validators.should_learn_from_interaction"
+  #   # Function signature: def should_learn_from_interaction(user_input: str, agent_response: str, metadata: dict) -> bool
+
+# Usage Example:
+# agent = Agent(
+#     profile='my_project',
+#     persona='your_persona_name',
+#     config={'use_semantic_search': True, 'storage_type': 'sqlite'}
+# )
