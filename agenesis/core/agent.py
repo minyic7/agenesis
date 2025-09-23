@@ -3,7 +3,7 @@ from pathlib import Path
 
 from ..perception import TextPerception, PerceptionResult
 from ..memory import ImmediateMemory, WorkingMemory, FileMemory, SQLiteMemory
-from ..cognition import BasicCognition
+from ..cognition import BasicCognition, SemanticCognition
 from ..action import BasicAction
 from ..evolution import EvolutionAnalyzer
 from ..persona import PersonaContext, BasePersona, load_persona
@@ -24,12 +24,34 @@ class Agent:
         self._init_memory()
         
         # Initialize cognition, action, and evolution
-        self.cognition = BasicCognition(self.config.get('cognition', {}))
+        # Use semantic cognition if enabled, otherwise basic cognition
+        use_semantic_search = self.config.get('use_semantic_search', True)
+        if use_semantic_search:
+            self.cognition = SemanticCognition(self.config.get('cognition', {}))
+        else:
+            self.cognition = BasicCognition(self.config.get('cognition', {}))
+
         self.action = BasicAction(self.config.get('action', {}))
         self.evolution = EvolutionAnalyzer(self.config.get('evolution', {}))
         
         # Initialize persona
         self.persona = self._init_persona(persona, persona_config)
+
+        # Initialize embeddings on startup (if using semantic search)
+        self._embedding_initialization_task = None
+        if (hasattr(self.cognition, 'embedding_provider') and
+            self.cognition.embedding_provider is not None):
+            # Schedule embedding initialization for working memory and recent persistent memory
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    self._embedding_initialization_task = loop.create_task(
+                        self._initialize_embeddings_startup()
+                    )
+            except RuntimeError:
+                # No event loop running, will initialize on first process_input
+                pass
     
     def _init_memory(self):
         """Initialize memory systems based on profile"""
@@ -80,21 +102,65 @@ class Agent:
     
     async def process_input(self, text_input: str) -> str:
         """Main processing pipeline: perception → memory → cognition → action"""
+        # 0. Ensure recent embeddings are initialized (if not already done)
+        if (self._embedding_initialization_task is None and
+            self.has_persistent_memory and
+            hasattr(self.cognition, 'embedding_provider') and
+            self.cognition.embedding_provider is not None):
+            await self.ensure_embedding_initialization()
+
         # 1. Generate persona context (if persona available)
         persona_context = self.persona.create_context(text_input) if self.persona else None
         
         # 2. Perceive input (with optional persona context)
         perception_result = self.perception.process(text_input, persona_context)
-        
-        # 3. Store in memory systems (with optional persona context)
+
+        # 3. Generate embedding before storing (if semantic search enabled)
+        embedding = None
+        if (hasattr(self.cognition, 'embedding_provider') and
+            self.cognition.embedding_provider is not None):
+            try:
+                embedding = await self.cognition.embedding_provider.embed_text(
+                    perception_result.content
+                )
+            except Exception as e:
+                print(f"⚠️ Failed to generate embedding: {e}")
+                embedding = None
+
+        # 4. Store in memory systems with embedding
         memory_context = {"persona_context": persona_context.to_dict()} if persona_context else None
-        self.immediate_memory.store(perception_result, memory_context)
-        self.working_memory.store(perception_result, memory_context)
+
+        # Create memory record with embedding
+        from ..memory.base import MemoryRecord
+        from datetime import datetime, timezone
+        memory_record = MemoryRecord(
+            id="",  # Generated in __post_init__
+            perception_result=perception_result,
+            stored_at=datetime.now(timezone.utc),
+            context=memory_context or {},
+            metadata={'memory_type': 'AgentMemory'},
+            embedding=embedding
+        )
+
+        # Store the complete record in all memory systems
+        immediate_id = self.immediate_memory.store_record(memory_record)
+        working_id = self.working_memory.store_record(memory_record)
+
         if self.has_persistent_memory:
-            self.persistent_memory.store(perception_result, memory_context)
+            persistent_id = self.persistent_memory.store_record(memory_record)
         
-        # 4. Cognitive processing (with optional persona context)
-        cognition_result = await self.cognition.process(self.immediate_memory, self.working_memory, persona_context)
+        # 4. Cognitive processing (with optional persona context and persistent memory)
+        persistent_memory = self.persistent_memory if self.has_persistent_memory else None
+
+        # Check if cognition supports semantic search with persistent memory
+        if hasattr(self.cognition, '_find_relevant_memories_semantic'):
+            cognition_result = await self.cognition.process(
+                self.immediate_memory, self.working_memory, persona_context, persistent_memory
+            )
+        else:
+            cognition_result = await self.cognition.process(
+                self.immediate_memory, self.working_memory, persona_context
+            )
         
         # 5. Action generation (with optional persona context)
         action_result = await self.action.generate_response(cognition_result, persona_context)
@@ -133,6 +199,10 @@ class Agent:
         """Get what the agent is currently focused on"""
         record = self.immediate_memory.get_current()
         return record.perception_result if record else None
+
+    def get_current_focus_record(self) -> Optional['MemoryRecord']:
+        """Get the current focus memory record"""
+        return self.immediate_memory.get_current()
     
     def get_session_context(self, count: int = 5) -> list:
         """Get recent session context"""
@@ -282,9 +352,82 @@ class Agent:
         
         return await self.import_project_knowledge(knowledge_sources)
 
+    async def _initialize_embeddings_startup(self) -> Dict[str, Any]:
+        """Initialize embeddings for working memory and recent persistent memory"""
+        if not (hasattr(self.cognition, 'embedding_provider') and
+                self.cognition.embedding_provider is not None):
+            return {'status': 'skipped', 'reason': 'no_embedding_provider'}
+
+        try:
+            results = {'working_memory': 0, 'persistent_memory': 0}
+
+            # 1. Embed all working memory records (should be ~100 max)
+            working_records = self.working_memory.get_all()
+            records_without_embeddings = [r for r in working_records if not r.embedding]
+
+            if records_without_embeddings:
+                print(f"🔄 Embedding {len(records_without_embeddings)} working memory records...")
+                contents = [r.perception_result.content for r in records_without_embeddings]
+                embeddings = await self.cognition.embedding_provider.embed_batch(contents)
+
+                # Update records in-place
+                for record, embedding in zip(records_without_embeddings, embeddings):
+                    if embedding and len(embedding) > 0:
+                        record.embedding = embedding
+                        results['working_memory'] += 1
+
+                print(f"✅ Embedded {results['working_memory']} working memory records")
+
+            # 2. Load recent 100 persistent memory records (should already have embeddings)
+            if self.has_persistent_memory:
+                recent_persistent = self.persistent_memory.get_recent(100)
+                records_without_embeddings = [r for r in recent_persistent if not r.embedding]
+
+                if records_without_embeddings:
+                    print(f"🔄 Embedding {len(records_without_embeddings)} recent persistent records...")
+                    contents = [r.perception_result.content for r in records_without_embeddings]
+                    embeddings = await self.cognition.embedding_provider.embed_batch(contents)
+
+                    # Batch update persistent storage
+                    batch_updates = []
+                    for record, embedding in zip(records_without_embeddings, embeddings):
+                        if embedding and len(embedding) > 0:
+                            record.embedding = embedding
+                            batch_updates.append((record.id, embedding))
+
+                    if batch_updates and hasattr(self.persistent_memory, 'batch_update_embeddings'):
+                        updated_count = self.persistent_memory.batch_update_embeddings(batch_updates)
+                        results['persistent_memory'] = updated_count
+                        print(f"✅ Embedded {updated_count} recent persistent records")
+
+                print(f"📚 Loaded {len(recent_persistent)} recent persistent memories (coverage ready)")
+
+            return {
+                'status': 'completed',
+                'working_memory_embedded': results['working_memory'],
+                'persistent_memory_embedded': results['persistent_memory']
+            }
+
+        except Exception as e:
+            print(f"⚠️ Startup embedding initialization failed: {e}")
+            return {'status': 'failed', 'error': str(e)}
+
+    async def ensure_embedding_initialization(self) -> None:
+        """Ensure embedding initialization has completed"""
+        if self._embedding_initialization_task:
+            try:
+                await self._embedding_initialization_task
+                self._embedding_initialization_task = None
+            except Exception as e:
+                print(f"Embedding initialization task failed: {e}")
+        elif (hasattr(self.cognition, 'embedding_provider') and
+              self.cognition.embedding_provider is not None):
+            # Initialize embeddings now if not already done
+            await self._initialize_embeddings_startup()
+
     def get_profile_info(self) -> Dict[str, Any]:
         """Get information about current agent profile"""
-        return {
+        profile_info = {
             'profile': self.profile,
             'is_anonymous': self.profile is None,
             'has_persistent_memory': self.has_persistent_memory,
@@ -297,3 +440,9 @@ class Agent:
                 'active': self.persona is not None
             }
         }
+
+        # Add semantic search info if available
+        if hasattr(self.cognition, 'get_semantic_search_info'):
+            profile_info['semantic_search'] = self.cognition.get_semantic_search_info()
+
+        return profile_info

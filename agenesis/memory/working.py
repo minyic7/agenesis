@@ -20,17 +20,34 @@ class WorkingMemory(BaseMemory):
             context=self._create_context(context),
             metadata=self._create_metadata()
         )
-        
+
         # Add to storage
         self._records.append(record)
         self._id_index[record.id] = record
-        
+
         # Maintain capacity limit
         if len(self._records) > self.max_capacity:
             removed = self._records.pop(0)  # Remove oldest
             del self._id_index[removed.id]
-        
+
         return record.id
+
+    def store_record(self, memory_record: MemoryRecord) -> str:
+        """Store a complete memory record - preserves embedding"""
+        # Update context and metadata but preserve other fields including embedding
+        memory_record.context.update(self._create_context(memory_record.context))
+        memory_record.metadata.update(self._create_metadata())
+
+        # Add to storage
+        self._records.append(memory_record)
+        self._id_index[memory_record.id] = memory_record
+
+        # Maintain capacity limit
+        if len(self._records) > self.max_capacity:
+            removed = self._records.pop(0)  # Remove oldest
+            del self._id_index[removed.id]
+
+        return memory_record.id
     
     def retrieve(self, memory_id: str) -> Optional[MemoryRecord]:
         """Retrieve a memory record by ID"""

@@ -18,9 +18,18 @@ class ImmediateMemory(BaseMemory):
             context=self._create_context(context),
             metadata=self._create_metadata()
         )
-        
+
         self._current_record = record
         return record.id
+
+    def store_record(self, memory_record: MemoryRecord) -> str:
+        """Store a complete memory record - preserves embedding"""
+        # Update context and metadata but preserve other fields including embedding
+        memory_record.context.update(self._create_context(memory_record.context))
+        memory_record.metadata.update(self._create_metadata())
+
+        self._current_record = memory_record
+        return memory_record.id
     
     def retrieve(self, memory_id: str) -> Optional[MemoryRecord]:
         """Retrieve by ID - only current record available"""

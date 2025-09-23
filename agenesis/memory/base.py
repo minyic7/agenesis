@@ -14,11 +14,14 @@ class MemoryRecord:
     stored_at: datetime
     context: Dict[str, Any]
     metadata: Dict[str, Any]
-    
+
     # Evolution support
     is_evolved_knowledge: bool = False
     evolution_metadata: Optional[Dict[str, Any]] = None
     reliability_multiplier: float = 1.0  # Higher for evolved knowledge
+
+    # Semantic search support
+    embedding: Optional[List[float]] = None  # OpenAI embedding for semantic search
     
     def __post_init__(self):
         if not self.id:
@@ -35,6 +38,11 @@ class BaseMemory(ABC):
     def store(self, perception_result: PerceptionResult, context: Optional[Dict[str, Any]] = None) -> str:
         """Store a perception result and return its memory ID"""
         pass
+
+    def store_record(self, memory_record: 'MemoryRecord') -> str:
+        """Store a complete memory record and return its memory ID"""
+        # Default implementation - can be overridden by subclasses for efficiency
+        return self.store(memory_record.perception_result, memory_record.context)
     
     @abstractmethod
     def retrieve(self, memory_id: str) -> Optional[MemoryRecord]:

@@ -123,13 +123,17 @@ class SQLiteMemory(BaseMemory):
                     perception_timestamp TEXT NOT NULL,
                     stored_at TEXT NOT NULL,
                     context TEXT NOT NULL,
-                    metadata TEXT NOT NULL
+                    metadata TEXT NOT NULL,
+                    is_evolved_knowledge INTEGER DEFAULT 0,
+                    evolution_metadata TEXT,
+                    reliability_multiplier REAL DEFAULT 1.0,
+                    embedding TEXT
                 )
             ''')
-            
+
             # Index for recent queries
             conn.execute('''
-                CREATE INDEX IF NOT EXISTS idx_stored_at 
+                CREATE INDEX IF NOT EXISTS idx_stored_at
                 ON memory_records(stored_at DESC)
             ''')
     
@@ -142,13 +146,26 @@ class SQLiteMemory(BaseMemory):
             context=self._create_context(context),
             metadata=self._create_metadata()
         )
-        
+
+        return self._store_record_to_db(record)
+
+    def store_record(self, memory_record: MemoryRecord) -> str:
+        """Store a complete memory record - preserves all fields including embedding"""
+        # Update context and metadata but preserve other fields
+        memory_record.context.update(self._create_context(memory_record.context))
+        memory_record.metadata.update(self._create_metadata())
+
+        return self._store_record_to_db(memory_record)
+
+    def _store_record_to_db(self, record: MemoryRecord) -> str:
+        """Internal method to store record to database"""
         with sqlite3.connect(self.db_path) as conn:
             conn.execute('''
-                INSERT INTO memory_records 
-                (id, content, input_type, perception_metadata, perception_features, 
-                 perception_timestamp, stored_at, context, metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO memory_records
+                (id, content, input_type, perception_metadata, perception_features,
+                 perception_timestamp, stored_at, context, metadata,
+                 is_evolved_knowledge, evolution_metadata, reliability_multiplier, embedding)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 record.id,
                 record.perception_result.content,
@@ -158,9 +175,13 @@ class SQLiteMemory(BaseMemory):
                 record.perception_result.timestamp.isoformat(),
                 record.stored_at.isoformat(),
                 json.dumps(record.context),
-                json.dumps(record.metadata)
+                json.dumps(record.metadata),
+                1 if record.is_evolved_knowledge else 0,
+                json.dumps(record.evolution_metadata) if record.evolution_metadata else None,
+                record.reliability_multiplier,
+                json.dumps(record.embedding) if record.embedding else None
             ))
-        
+
         return record.id
     
     def retrieve(self, memory_id: str) -> Optional[MemoryRecord]:
@@ -192,7 +213,7 @@ class SQLiteMemory(BaseMemory):
         """Convert SQLite row to MemoryRecord"""
         from ..perception.base import PerceptionResult, InputType
         from datetime import datetime
-        
+
         perception_result = PerceptionResult(
             content=row['content'],
             input_type=InputType(row['input_type']),
@@ -200,11 +221,88 @@ class SQLiteMemory(BaseMemory):
             features=json.loads(row['perception_features']),
             timestamp=datetime.fromisoformat(row['perception_timestamp'])
         )
-        
+
+        # Handle evolution metadata and embedding
+        evolution_metadata = None
+        if row['evolution_metadata']:
+            evolution_metadata = json.loads(row['evolution_metadata'])
+
+        embedding = None
+        if row['embedding']:
+            embedding = json.loads(row['embedding'])
+
         return MemoryRecord(
             id=row['id'],
             perception_result=perception_result,
             stored_at=datetime.fromisoformat(row['stored_at']),
             context=json.loads(row['context']),
-            metadata=json.loads(row['metadata'])
+            metadata=json.loads(row['metadata']),
+            is_evolved_knowledge=bool(row['is_evolved_knowledge']),
+            evolution_metadata=evolution_metadata,
+            reliability_multiplier=row['reliability_multiplier'],
+            embedding=embedding
         )
+
+    def update_embedding(self, memory_id: str, embedding: List[float]) -> bool:
+        """Update the embedding for a specific memory record"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute(
+                    'UPDATE memory_records SET embedding = ? WHERE id = ?',
+                    (json.dumps(embedding), memory_id)
+                )
+                return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Failed to update embedding for {memory_id}: {e}")
+            return False
+
+    def get_records_without_embeddings(self, limit: int = 100) -> List[MemoryRecord]:
+        """Get records that don't have embeddings yet"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                'SELECT * FROM memory_records WHERE embedding IS NULL ORDER BY stored_at DESC LIMIT ?',
+                (limit,)
+            )
+
+            return [self._row_to_record(row) for row in cursor.fetchall()]
+
+    def batch_update_embeddings(self, embeddings_data: List[tuple]) -> int:
+        """Batch update embeddings for multiple records
+
+        Args:
+            embeddings_data: List of (memory_id, embedding) tuples
+
+        Returns:
+            Number of records updated
+        """
+        if not embeddings_data:
+            return 0
+
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.executemany(
+                    'UPDATE memory_records SET embedding = ? WHERE id = ?',
+                    [(json.dumps(embedding), memory_id) for memory_id, embedding in embeddings_data]
+                )
+                return cursor.rowcount
+        except Exception as e:
+            print(f"Failed to batch update embeddings: {e}")
+            return 0
+
+    def get_embedding_statistics(self) -> Dict[str, int]:
+        """Get statistics about embeddings in the database"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                'SELECT COUNT(*) as total, SUM(CASE WHEN embedding IS NOT NULL THEN 1 ELSE 0 END) as with_embeddings FROM memory_records'
+            )
+            row = cursor.fetchone()
+            total = row[0]
+            with_embeddings = row[1]
+
+            return {
+                'total_records': total,
+                'records_with_embeddings': with_embeddings,
+                'records_without_embeddings': total - with_embeddings,
+                'embedding_coverage': (with_embeddings / total * 100) if total > 0 else 0
+            }
