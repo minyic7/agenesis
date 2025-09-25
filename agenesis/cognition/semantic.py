@@ -58,89 +58,88 @@ class SemanticCognition(BasicCognition):
         user_input: str,
         persistent_memory=None
     ) -> List[str]:
-        """Find relevant memories using semantic similarity with OpenAI embeddings"""
+        """Find relevant memories using semantic similarity with database-level vector search"""
 
         if not self.embedding_provider:
-            # Fallback to keyword matching
             return self._find_relevant_memories(working_memory, user_input)
 
         try:
             # Generate embedding for current user input
             query_embedding = await self.embedding_provider.embed_text(user_input)
 
-            # Collect candidate memories from working memory and persistent memory
-            candidate_memories = []
+            relevant_memory_ids = []
 
-            # Get working memory records (recent conversation)
-            working_records = working_memory.get_recent(20)  # Get more for better search
-            for record in working_records:
-                candidate_memories.append({
+            # Search working memory (in-memory for recent conversations)
+            working_records = working_memory.get_recent(1000)  # Increased from 100 for better performance
+            working_memories_with_embeddings = [
+                {
                     'id': record.id,
-                    'content': record.perception_result.content,
                     'embedding': record.embedding,
-                    'source': 'working',
-                    'record': record
-                })
-
-            # Get persistent memory records if available and enabled
-            if persistent_memory and self.include_persistent_memory:
-                persistent_records = persistent_memory.get_recent(50)  # Get more historical context
-                for record in persistent_records:
-                    candidate_memories.append({
-                        'id': record.id,
-                        'content': record.perception_result.content,
-                        'embedding': record.embedding,
-                        'source': 'persistent',
-                        'record': record
-                    })
-
-            # All memories should already have embeddings (embedded before storage)
-            # Filter out any without embeddings (edge case for old data)
-            memories_with_embeddings = [
-                mem for mem in candidate_memories
-                if mem['embedding'] is not None and len(mem['embedding']) > 0
+                    'source': 'working'
+                }
+                for record in working_records
+                if record.embedding is not None and len(record.embedding) > 0
             ]
 
-            if len(memories_with_embeddings) < len(candidate_memories):
-                missing_count = len(candidate_memories) - len(memories_with_embeddings)
-                print(f"⚠️ Skipping {missing_count} memories without embeddings (old data)")
+            if working_memories_with_embeddings:
+                # In-memory search for working memory (small dataset)
+                embeddings = [mem['embedding'] for mem in working_memories_with_embeddings]
+                similar_indices = EmbeddingUtils.find_most_similar(
+                    query_embedding=query_embedding,
+                    candidate_embeddings=embeddings,
+                    top_k=self.max_relevant_memories // 2,  # Split quota between working and persistent
+                    min_similarity=self.min_similarity_threshold
+                )
 
-            # Find most similar memories
-            embeddings = [mem['embedding'] for mem in memories_with_embeddings]
+                for embedding_idx, similarity_score in similar_indices:
+                    memory = working_memories_with_embeddings[embedding_idx]
+                    final_score = similarity_score * 1.2  # 20% boost for recent context
+                    relevant_memory_ids.append((memory['id'], final_score))
 
-            if not embeddings:
-                # No embeddings available, fallback to keyword matching
-                return self._find_relevant_memories(working_memory, user_input)
+            # Search persistent memory using database-level vector search
+            if persistent_memory and self.include_persistent_memory:
+                # Check if persistent memory supports vector search
+                if hasattr(persistent_memory, 'vector_similarity_search'):
+                    try:
+                        # Use database-level vector search - NO LIMIT!
+                        persistent_results = persistent_memory.vector_similarity_search(
+                            query_embedding=query_embedding,
+                            limit=10000,  # Very high limit - let similarity threshold filter
+                            min_similarity=self.min_similarity_threshold
+                        )
 
-            # Get similarity scores
-            similar_indices = EmbeddingUtils.find_most_similar(
-                query_embedding=query_embedding,
-                candidate_embeddings=embeddings,
-                top_k=self.max_relevant_memories,
-                min_similarity=self.min_similarity_threshold
-            )
+                        # Add persistent memory results
+                        for memory_record, similarity_score in persistent_results:
+                            relevant_memory_ids.append((memory_record.id, similarity_score))
 
-            # Convert to memory IDs with pure similarity ranking
-            relevant_memory_ids = []
-            for embedding_idx, similarity_score in similar_indices:
-                memory = memories_with_embeddings[embedding_idx]
+                        print(f"🔍 Found {len(persistent_results)} relevant memories from persistent storage")
 
-                # Use pure similarity score for ranking
-                final_score = similarity_score
+                    except Exception as e:
+                        print(f"⚠️ Database vector search failed, falling back to recent records: {e}")
+                        # Fallback to recent records if vector search fails
+                        persistent_records = persistent_memory.get_recent(1000)  # Increased from 100 for better performance
+                        for record in persistent_records:
+                            if record.embedding is not None:
+                                relevant_memory_ids.append((record.id, 0.5))  # Default similarity score
 
-                # Prioritize working memory over persistent memory for recency
-                if memory['source'] == 'working':
-                    final_score *= 1.2  # 20% boost for recent context
-
-                relevant_memory_ids.append((memory['id'], final_score))
+                else:
+                    print("⚠️ Persistent memory doesn't support vector search, using recent records")
+                    # Fallback for persistent memory without vector search
+                    persistent_records = persistent_memory.get_recent(1000)  # Increased from 100 for better performance
+                    for record in persistent_records:
+                        relevant_memory_ids.append((record.id, 0.3))  # Lower default score
 
             # Sort by final score and return just the IDs
             relevant_memory_ids.sort(key=lambda x: x[1], reverse=True)
-            return [memory_id for memory_id, score in relevant_memory_ids]
+
+            # Limit to max_relevant_memories for final results
+            final_ids = [memory_id for memory_id, score in relevant_memory_ids[:self.max_relevant_memories]]
+
+            print(f"📋 Selected {len(final_ids)} most relevant memories (from {len(relevant_memory_ids)} candidates)")
+            return final_ids
 
         except Exception as e:
             print(f"Semantic memory retrieval failed: {e}")
-            # Fallback to keyword matching
             return self._find_relevant_memories(working_memory, user_input)
 
 
