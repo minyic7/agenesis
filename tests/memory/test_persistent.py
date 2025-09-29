@@ -2,7 +2,7 @@ import tempfile
 import os
 from pathlib import Path
 
-from agenesis.memory import SQLiteMemory, FileMemory
+from agenesis.memory import SQLiteMemory
 from agenesis.perception import TextPerception
 
 
@@ -63,28 +63,3 @@ def test_sqlite_memory_persistence_across_instances():
         assert recent[0].perception_result.content == "Persistent message"
 
 
-def test_file_memory_basic():
-    """Test FileMemory basic functionality"""
-    perception = TextPerception()
-    
-    with tempfile.TemporaryDirectory() as temp_dir:
-        # Create memory with temporary directory
-        memory = FileMemory({'storage_dir': temp_dir})
-        
-        # Store data
-        result = perception.process("File stored message")
-        memory_id = memory.store(result)
-        
-        # Verify file exists
-        records_file = Path(temp_dir) / 'records.jsonl'
-        assert records_file.exists()
-        
-        # Retrieve data
-        retrieved = memory.retrieve(memory_id)
-        assert retrieved is not None
-        assert retrieved.perception_result.content == "File stored message"
-        
-        # Get recent
-        recent = memory.get_recent(1)
-        assert len(recent) == 1
-        assert recent[0].perception_result.content == "File stored message"

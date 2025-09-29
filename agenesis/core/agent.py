@@ -2,7 +2,7 @@ from typing import Optional, Dict, Any, Union
 from pathlib import Path
 
 from ..perception import TextPerception, PerceptionResult
-from ..memory import ImmediateMemory, WorkingMemory, FileMemory, SQLiteMemory
+from ..memory import ImmediateMemory, WorkingMemory, SQLiteMemory
 from ..cognition import BasicCognition, SemanticCognition
 from ..action import BasicAction
 from ..evolution import EvolutionAnalyzer
@@ -84,15 +84,10 @@ class Agent:
         """Initialize persistent memory for named profiles"""
         profile_dir = Path.home() / '.agenesis' / 'profiles' / self.profile
         profile_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Choose storage type from config (default to FileMemory)
-        storage_type = self.config.get('storage_type', 'file')
-        
-        if storage_type == 'sqlite':
-            db_path = profile_dir / 'memory.db'
-            self.persistent_memory = SQLiteMemory({'db_path': str(db_path)})
-        else:  # file storage
-            self.persistent_memory = FileMemory({'storage_dir': str(profile_dir)})
+
+        # Use SQLiteMemory for all persistent storage
+        db_path = profile_dir / 'memory.db'
+        self.persistent_memory = SQLiteMemory({'db_path': str(db_path)})
     
     def _init_persona(self, persona: Optional[Union[str, Dict[str, Any]]], 
                      persona_config: Optional[str]) -> Optional[BasePersona]:

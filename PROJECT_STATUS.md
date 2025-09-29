@@ -123,7 +123,7 @@ print(f"Persona: {info['persona']['name']}")
 
 - **✅ 100+ Tests Passing** - Comprehensive coverage
 - **✅ Real LLM Integration** - OpenAI and Anthropic tested
-- **✅ Memory Persistence** - File and SQLite storage
+- **✅ Memory Persistence** - SQLite storage with vector search
 - **✅ Conversation Continuity** - 8+ interaction sessions
 - **✅ Clean Architecture** - Modular, testable, extensible
 - **✅ Developer Experience** - Simple API, clear documentation

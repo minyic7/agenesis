@@ -53,15 +53,11 @@ class MemoryRecord:
 
 #### **Storage Backend Implementations**
 
-**FileMemory:**
-- **Format**: JSONL (JSON Lines) for simple text-based storage
-- **Use Case**: Development, debugging, simple persistence needs
-- **Features**: Human-readable, easy backup and version control
-
-**SQLiteMemory:**
-- **Format**: SQLite database with optimized schema
-- **Use Case**: Production usage, semantic search, large datasets
-- **Features**: Vector search, indexing, efficient queries, ACID compliance
+**SQLiteMemory (Universal):**
+- **Format**: SQLite database with optimized schema and vector search
+- **Use Case**: Universal storage for all use cases - production, development, semantic search
+- **Features**: Vector search, indexing, efficient queries, ACID compliance, intelligent caching
+- **Benefits**: No configuration required, full semantic search capabilities out of the box, simplified architecture
 
 #### **Semantic Search Integration**
 - **Embedding Provider**: OpenAI text-embedding-3-small (1536 dimensions)
@@ -84,11 +80,11 @@ DEFAULT_MAX_CAPACITY = 100  # Maximum records in working memory
 ~/.agenesis/
 └── profiles/
     ├── project_alpha/
-    │   ├── records.jsonl      # File storage option
-    │   └── memory.db          # SQLite storage option
+    │   └── memory.db          # SQLite storage (default)
     └── personal_assistant/
-        └── memory.db
+        └── memory.db          # SQLite storage (default)
 ```
+
 
 **Benefits:**
 - **User-scoped data**: Each user maintains separate agent profiles
