@@ -6,6 +6,17 @@ from .base import BaseCognition, CognitionResult
 from ..providers import create_llm_provider, OpenAIProvider, AnthropicProvider
 
 
+# Basic Cognition Constants
+class BasicCognitionConfig:
+    """Constants for basic cognition to avoid magic numbers"""
+    # LLM Configuration
+    LLM_TEMPERATURE = 0.1  # Low temperature for consistent responses
+    LLM_MAX_TOKENS = 300   # Token limit for cognition responses
+
+    # Text Processing
+    SUMMARY_MAX_LENGTH = 100  # Maximum length for summary text
+
+
 class BasicCognition(BaseCognition):
     """Basic cognitive processing with LLM enhancement and heuristic fallback"""
     
@@ -43,23 +54,23 @@ Recent Context: {recent_context}
 Respond with JSON only:
 {{
     "intent": "question|request|statement|conversation",
-    "context_type": "new|continuation|clarification|related", 
-    "persistence_score": 0.0-1.0,
+    "context_type": "new|continuation|clarification|related",
+    "should_persist": true|false,
     "summary": "brief description of what user wants",
     "reasoning": "why you classified it this way"
 }}
 
 Remember:
-- persistence_score should be higher (0.7-1.0) for important requests, preferences, or meaningful information
-- persistence_score should be lower (0.0-0.4) for casual conversation, greetings, confirmations
+- should_persist should be true for important requests, preferences, meaningful information that would help in future interactions
+- should_persist should be false for casual conversation, greetings, confirmations, or one-off questions
 - intent should capture the primary purpose of the message
 - context_type should indicate how this relates to the recent conversation"""
 
         try:
             response = await self.llm_provider.complete(
                 prompt=prompt,
-                temperature=0.1,
-                max_tokens=300
+                temperature=BasicCognitionConfig.LLM_TEMPERATURE,
+                max_tokens=BasicCognitionConfig.LLM_MAX_TOKENS
             )
             
             # Parse JSON response
@@ -68,10 +79,9 @@ Remember:
             return CognitionResult(
                 intent=analysis.get("intent", "conversation"),
                 context_type=analysis.get("context_type", "new"),
-                persistence_score=float(analysis.get("persistence_score", 0.5)),
-                summary=analysis.get("summary", user_input[:100]),
+                should_persist=bool(analysis.get("should_persist", False)),
+                summary=analysis.get("summary", user_input[:BasicCognitionConfig.SUMMARY_MAX_LENGTH]),
                 relevant_memories=relevant_memories,
-                confidence=0.9,  # High confidence for LLM analysis
                 reasoning=analysis.get("reasoning", "LLM analysis")
             )
             
@@ -92,20 +102,19 @@ Remember:
         elif "statement" in response_lower:
             intent = "statement"
         
-        # Try to extract persistence score
-        persistence_score = 0.5
-        if "high" in response_lower or "important" in response_lower:
-            persistence_score = 0.8
-        elif "low" in response_lower or "casual" in response_lower:
-            persistence_score = 0.2
-        
+        # Try to extract persistence decision
+        should_persist = False
+        if "important" in response_lower or "persist" in response_lower or "true" in response_lower:
+            should_persist = True
+        elif "casual" in response_lower or "false" in response_lower or "greeting" in response_lower:
+            should_persist = False
+
         return CognitionResult(
             intent=intent,
             context_type="new",
-            persistence_score=persistence_score,
-            summary=user_input[:100],
+            should_persist=should_persist,
+            summary=user_input[:BasicCognitionConfig.SUMMARY_MAX_LENGTH],
             relevant_memories=relevant_memories,
-            confidence=0.6,  # Lower confidence for partial parsing
             reasoning="Partial LLM response parsing"
         )
     
@@ -117,17 +126,16 @@ Remember:
         
         # Simple context detection
         context_type = "continuation" if relevant_memories else "new"
-        
-        # Placeholder persistence scoring (neutral default as agreed)
-        persistence_score = 0.5
-        
+
+        # Simple heuristic persistence decision
+        should_persist = intent in ["request", "statement"]  # Persist requests and statements, not questions/conversation
+
         return CognitionResult(
             intent=intent,
             context_type=context_type,
-            persistence_score=persistence_score,
+            should_persist=should_persist,
             summary=f"Heuristic analysis: {intent}",
             relevant_memories=relevant_memories,
-            confidence=0.7,  # Medium confidence for heuristics
             reasoning="Heuristic pattern matching"
         )
     
@@ -157,9 +165,8 @@ Remember:
         return CognitionResult(
             intent="conversation",
             context_type="new",
-            persistence_score=0.1,  # Low persistence for empty input
+            should_persist=False,  # Never persist empty input
             summary="Empty input",
             relevant_memories=[],
-            confidence=0.1,
             reasoning="No input provided"
         )

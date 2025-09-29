@@ -24,7 +24,7 @@ class TestBasicCognition:
         
         assert isinstance(result, CognitionResult)
         assert result.intent == "conversation"
-        assert result.persistence_score == 0.1
+        assert result.should_persist == False
         assert result.summary == "Empty input"
     
     @pytest.mark.asyncio
@@ -37,8 +37,7 @@ class TestBasicCognition:
         result = await self.cognition.process(self.immediate_memory, self.working_memory)
         
         assert result.intent == "question"
-        assert 0.0 <= result.persistence_score <= 1.0
-        assert result.confidence > 0.0
+        assert isinstance(result.should_persist, bool)
         assert "question" in result.summary.lower() or "?" in result.summary
     
     @pytest.mark.asyncio
@@ -50,7 +49,6 @@ class TestBasicCognition:
         result = await self.cognition.process(self.immediate_memory, self.working_memory)
         
         assert result.intent == "request"
-        assert result.confidence > 0.0
     
     @pytest.mark.asyncio
     async def test_statement_intent(self):
@@ -61,7 +59,6 @@ class TestBasicCognition:
         result = await self.cognition.process(self.immediate_memory, self.working_memory)
         
         assert result.intent == "statement"
-        assert result.confidence > 0.0
     
     @pytest.mark.asyncio
     async def test_conversation_intent(self):
@@ -72,7 +69,6 @@ class TestBasicCognition:
         result = await self.cognition.process(self.immediate_memory, self.working_memory)
         
         assert result.intent == "conversation"
-        assert result.confidence > 0.0
     
     @pytest.mark.asyncio
     async def test_context_awareness(self):
@@ -102,25 +98,23 @@ class TestBasicCognition:
         # Check all required fields exist
         assert hasattr(result, 'intent')
         assert hasattr(result, 'context_type')
-        assert hasattr(result, 'persistence_score')
+        assert hasattr(result, 'should_persist')
         assert hasattr(result, 'summary')
         assert hasattr(result, 'relevant_memories')
-        assert hasattr(result, 'confidence')
         assert hasattr(result, 'reasoning')
         assert hasattr(result, 'timestamp')
         
         # Check data types
         assert isinstance(result.intent, str)
         assert isinstance(result.context_type, str)
-        assert isinstance(result.persistence_score, float)
+        assert isinstance(result.should_persist, bool)
         assert isinstance(result.summary, str)
         assert isinstance(result.relevant_memories, list)
-        assert isinstance(result.confidence, float)
         assert isinstance(result.reasoning, str)
         
         # Check ranges
-        assert 0.0 <= result.persistence_score <= 1.0
-        assert 0.0 <= result.confidence <= 1.0
+        assert isinstance(result.should_persist, bool)
+        # Confidence field removed per user feedback
     
     @pytest.mark.asyncio
     async def test_llm_fallback_behavior(self):
@@ -140,4 +134,3 @@ class TestBasicCognition:
         # Should still return valid result via heuristic fallback
         assert isinstance(result, CognitionResult)
         assert result.intent == "question"
-        assert result.confidence > 0.0

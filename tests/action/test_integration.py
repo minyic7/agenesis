@@ -36,13 +36,12 @@ class TestActionIntegration:
         # 3. Cognition
         cognition_result = await self.cognition.process(self.immediate_memory, self.working_memory)
         assert cognition_result.intent in ["question", "request", "statement", "conversation"]
-        assert 0.0 <= cognition_result.confidence <= 1.0
+        assert isinstance(cognition_result.should_persist, bool)
         
         # 4. Action
         action_result = await self.action.generate_response(cognition_result)
         assert isinstance(action_result.response_text, str)
         assert len(action_result.response_text) > 0
-        assert 0.0 <= action_result.confidence <= 1.0
         
         print(f"Input: '{test_input}'")
         print(f"Intent: {cognition_result.intent}")
@@ -137,10 +136,9 @@ async def test_action_with_llm():
     cognition_result = CognitionResult(
         intent="question",
         context_type="new",
-        persistence_score=0.7,
+        should_persist=True,
         summary="User asking about machine learning",
         relevant_memories=[],
-        confidence=0.9,
         reasoning="Clear question about technical topic"
     )
     
@@ -148,8 +146,6 @@ async def test_action_with_llm():
     
     assert isinstance(action_result.response_text, str)
     assert len(action_result.response_text) > 0
-    assert 0.0 <= action_result.confidence <= 1.0
-    
+
     print(f"🧠 Cognition: {cognition_result.summary}")
     print(f"🤖 Action: '{action_result.response_text}'")
-    print(f"📊 Confidence: {action_result.confidence}")

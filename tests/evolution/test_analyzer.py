@@ -30,21 +30,20 @@ class TestEvolutionAnalyzer:
     
     @pytest.mark.asyncio
     async def test_preference_detection_heuristic(self):
-        """Test that heuristic mode can detect obvious preferences"""
+        """Test that evolution analysis without LLM returns rejection (heuristic mode)"""
         # Add preference statement to memory
         perception_result = self.perception.process("I prefer Python over JavaScript for data analysis")
         self.immediate_memory.store(perception_result)
         self.working_memory.store(perception_result)
-        
+
         decision = await self.evolution.analyze_memory_session(
             self.immediate_memory, self.working_memory
         )
-        
+
         assert isinstance(decision, EvolutionDecision)
-        assert decision.should_persist is True
-        assert decision.learning_type == "preference"
-        assert decision.confidence > 0.0
-        assert decision.future_application is not None
+        # Without LLM, evolution analysis should return rejection
+        assert decision.should_persist is False
+        assert "No LLM provider available" in decision.rejection_reason
     
     @pytest.mark.asyncio
     async def test_casual_conversation_rejection(self):
@@ -71,7 +70,6 @@ class TestEvolutionAnalyzer:
             should_persist=True,
             learning_type="preference",
             learning_description="User prefers Python for data analysis",
-            confidence=0.8,
             future_application="Use Python examples when discussing data analysis"
         )
         
@@ -81,8 +79,7 @@ class TestEvolutionAnalyzer:
         assert metadata.knowledge_summary == decision.learning_description
         assert metadata.learning_context == decision.learning_type
         assert metadata.future_relevance == decision.future_application
-        assert metadata.reliability_boost > 1.0  # Should boost based on confidence
-        assert metadata.evolved_at is not None
+        assert metadata.evolved_at is not None  # Should have timestamp
     
     def test_evolved_knowledge_metadata_invalid_decision(self):
         """Test that invalid decisions raise errors"""
@@ -96,8 +93,8 @@ class TestEvolutionAnalyzer:
         # Session end should always trigger
         assert self.evolution.should_trigger_analysis("session_end", {}) is True
         
-        # High confidence should trigger with high confidence value
-        assert self.evolution.should_trigger_analysis("high_confidence", {"confidence": 0.9}) is True
+        # High confidence trigger has been disabled (confidence scores removed)
+        assert self.evolution.should_trigger_analysis("high_confidence", {"confidence": 0.9}) is False
         assert self.evolution.should_trigger_analysis("high_confidence", {"confidence": 0.5}) is False
         
         # User learning indicators should trigger when present
@@ -125,8 +122,8 @@ class TestEvolutionAnalyzer:
         assert len(summary) > 0
         assert "healthcare" in summary
         assert "HIPAA" in summary
-        assert "Current:" in summary  # Should include current focus
-        assert "Memory" in summary     # Should include working memory
+        assert "Current user input:" in summary  # Should include current focus
+        assert "User input" in summary     # Should include working memory
 
 
 @pytest.mark.asyncio
@@ -160,4 +157,3 @@ async def test_evolution_with_llm():
     
     assert isinstance(decision, EvolutionDecision)
     assert isinstance(decision.should_persist, bool)
-    assert 0.0 <= decision.confidence <= 1.0

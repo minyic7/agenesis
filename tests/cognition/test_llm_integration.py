@@ -34,15 +34,13 @@ async def test_cognition_with_llm():
     assert result.intent in ["question", "request", "statement", "conversation"]
     assert result.context_type in ["new", "continuation", "clarification", "related"]
     assert 0.0 <= result.persistence_score <= 1.0
-    assert 0.0 <= result.confidence <= 1.0
     assert len(result.summary) > 0
     assert len(result.reasoning) > 0
-    
+
     print(f"✅ Intent: {result.intent}")
     print(f"✅ Context type: {result.context_type}")
     print(f"✅ Persistence score: {result.persistence_score}")
     print(f"✅ Summary: {result.summary}")
-    print(f"✅ Confidence: {result.confidence}")
     print(f"✅ Reasoning: {result.reasoning}")
 
 
@@ -73,8 +71,7 @@ async def test_cognition_different_intents():
         print(f"Input: '{test_input}' -> Intent: {result.intent} (Expected: {expected_intent})")
         # Note: LLM might classify differently than heuristics, so we just ensure it's valid
         assert result.intent in ["question", "request", "statement", "conversation"]
-        assert isinstance(result.persistence_score, float)
-        assert 0.0 <= result.persistence_score <= 1.0
+        assert isinstance(result.should_persist, bool)
 
 
 @pytest.mark.asyncio 

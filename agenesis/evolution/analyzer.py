@@ -5,6 +5,20 @@ from .base import BaseEvolution, EvolutionDecision, EvolvedKnowledge
 from ..providers import create_llm_provider
 
 
+# Evolution Analysis Constants
+class EvolutionConfig:
+    """Constants for evolution analysis to avoid magic numbers"""
+    # LLM Configuration
+    ANALYSIS_TEMPERATURE = 0.1  # Low temperature for consistent analysis
+    MAX_ANALYSIS_TOKENS = 300  # Token limit for analysis responses
+
+    # Memory Analysis
+    RECENT_RECORDS_LIMIT = 5  # Number of recent records to analyze
+
+    # String Processing
+    TRUNCATION_LENGTH = 50  # Length for string truncation in logs
+
+
 class EvolutionAnalyzer(BaseEvolution):
     """Main evolution analyzer supporting multiple data sources"""
     
@@ -120,8 +134,8 @@ Default to should_persist=false unless there's clear, valuable learning."""
 
         response = await self.llm_provider.complete(
             prompt=base_prompt,
-            temperature=0.1,  # Low temperature for consistent analysis
-            max_tokens=300
+            temperature=EvolutionConfig.ANALYSIS_TEMPERATURE,  # Low temperature for consistent analysis
+            max_tokens=EvolutionConfig.MAX_ANALYSIS_TOKENS
         )
         
         try:
@@ -153,7 +167,7 @@ Default to should_persist=false unless there's clear, valuable learning."""
             content_parts.append(f"Current user input: {current_record.perception_result.content}")
 
         # Get recent working memory - user inputs only
-        recent_records = working_memory.get_recent(5)
+        recent_records = working_memory.get_recent(EvolutionConfig.RECENT_RECORDS_LIMIT)
         for i, record in enumerate(recent_records):
             content_parts.append(f"User input {i+1}: {record.perception_result.content}")
 
@@ -177,9 +191,9 @@ Default to should_persist=false unless there's clear, valuable learning."""
         if trigger_type == "session_end":
             return True
         
-        # Trigger for high-confidence interactions
-        if trigger_type == "high_confidence" and context.get("confidence", 0) > 0.8:
-            return True
+        # Trigger for high-confidence interactions (disabled - confidence scores removed)
+        if trigger_type == "high_confidence":
+            return False
         
         # Trigger for explicit user learning indicators
         if trigger_type == "user_learning" and context.get("contains_learning_indicators", False):
@@ -219,8 +233,8 @@ Default to should_persist=false unless there's clear, valuable learning."""
                     # In practice, this would load and execute user-provided validation code
                     # For now, return True to allow the implementation to be added later
                     print(f"📋 User validation function configured: {validation_function}")
-                    print(f"   Input: '{user_input[:50]}...'")
-                    print(f"   Response: '{agent_response[:50]}...'")
+                    print(f"   Input: '{user_input[:EvolutionConfig.TRUNCATION_LENGTH]}...'")
+                    print(f"   Response: '{agent_response[:EvolutionConfig.TRUNCATION_LENGTH]}...'")
                     print(f"   Metadata: {metadata}")
                     # TODO: Implement function loading and execution
                     return True

@@ -5,6 +5,14 @@ from ..cognition.base import CognitionResult
 from ..providers import create_llm_provider
 
 
+# Basic Action Constants
+class BasicActionConfig:
+    """Constants for action generation to avoid magic numbers"""
+    # LLM Configuration defaults
+    DEFAULT_LLM_TEMPERATURE = 0.7  # Slightly higher temperature for creative responses
+    DEFAULT_MAX_RESPONSE_TOKENS = 300  # Token limit for response generation
+
+
 class BasicAction(BaseAction):
     """Basic action processor with LLM enhancement and heuristic fallback"""
     
@@ -13,8 +21,13 @@ class BasicAction(BaseAction):
         self.llm_provider = create_llm_provider()
         self.use_llm = self.llm_provider is not None
     
-    async def generate_response(self, cognition_result: CognitionResult, context: Any = None) -> ActionResult:
+    async def generate_response(
+        self,
+        cognition_result: CognitionResult,
+        context: Any = None
+    ) -> ActionResult:
         """Main response generation entry point - returns simple text response"""
+
         if self.use_llm:
             try:
                 return await self._generate_with_llm(cognition_result)
@@ -25,33 +38,59 @@ class BasicAction(BaseAction):
             return self._generate_with_heuristics(cognition_result)
     
     async def _generate_with_llm(self, cognition_result: CognitionResult) -> ActionResult:
-        """Generate response using LLM with structured prompt"""
-        
-        prompt = f"""You are a helpful AI assistant. Based on the analysis below, generate an appropriate response.
+        """Generate response using LLM with structured prompt and memory context"""
+
+        # Base cognition analysis
+        prompt = f"""You are a helpful AI assistant. Based on the analysis and context below, generate an appropriate response.
 
 Cognition Analysis:
 - User Intent: {cognition_result.intent}
-- Context Type: {cognition_result.context_type}  
+- Context Type: {cognition_result.context_type}
 - Summary: {cognition_result.summary}
-- Reasoning: {cognition_result.reasoning}
+- Reasoning: {cognition_result.reasoning}"""
+
+        # Add structured memory context from cognition result
+        memory_context = cognition_result.memory_context
+        if memory_context and memory_context.get('has_memories'):
+            prompt += "\n\nMemory Context:"
+
+            # Current Focus
+            if memory_context.get('focus'):
+                prompt += f"\n\nCURRENT INPUT:\n- {memory_context['focus'][0]}"
+
+            # Recent conversation (Working Memory)
+            if memory_context.get('working'):
+                prompt += "\n\nRECENT CONVERSATION:"
+                for memory in memory_context['working']:
+                    prompt += f"\n- {memory}"
+
+            # Long-term knowledge (Persistent Memory)
+            if memory_context.get('persistent'):
+                prompt += "\n\nRELEVANT KNOWLEDGE:"
+                for memory in memory_context['persistent']:
+                    prompt += f"\n- {memory}"
+
+            prompt += "\n\nUse this memory context to provide a more informed and contextually relevant response."
+
+        # Guidelines
+        prompt += """
 
 Guidelines:
-- For "question" intent: Provide informative answers
-- For "request" intent: Offer helpful assistance  
-- For "statement" intent: Acknowledge and engage appropriately
-- For "conversation" intent: Respond naturally and socially
+- For "question" intent: Provide informative answers using available context
+- For "request" intent: Offer helpful assistance based on relevant knowledge
+- For "statement" intent: Acknowledge and engage using conversation history
+- For "conversation" intent: Respond naturally referencing appropriate context
 
-Generate a helpful, relevant response that addresses the user's intent."""
+Generate a helpful, relevant response that incorporates the available memory context."""
 
         response = await self.llm_provider.complete(
             prompt=prompt,
-            temperature=self.config.get('llm_temperature', 0.7),
-            max_tokens=self.config.get('max_response_tokens', 300)
+            temperature=self.config.get('llm_temperature', BasicActionConfig.DEFAULT_LLM_TEMPERATURE),
+            max_tokens=self.config.get('max_response_tokens', BasicActionConfig.DEFAULT_MAX_RESPONSE_TOKENS)
         )
         
         return ActionResult(
             response_text=response.strip(),
-            confidence=cognition_result.confidence * self.config.get('confidence_factor', 0.9),
             internal_reasoning=f"LLM response based on {cognition_result.intent} intent"
         )
     
@@ -73,6 +112,5 @@ Generate a helpful, relevant response that addresses the user's intent."""
         
         return ActionResult(
             response_text=response,
-            confidence=cognition_result.confidence * 0.7,  # Lower confidence for heuristics
             internal_reasoning=f"Heuristic response for {intent} intent"
         )

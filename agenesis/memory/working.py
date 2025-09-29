@@ -2,12 +2,18 @@ from typing import Dict, List, Optional, Any
 from .base import BaseMemory, MemoryRecord, PerceptionResult
 
 
+# Working Memory Configuration
+class WorkingMemoryConfig:
+    """Constants for working memory to avoid magic numbers"""
+    DEFAULT_MAX_CAPACITY = 100  # Maximum number of records to hold in working memory
+
+
 class WorkingMemory(BaseMemory):
     """In-memory storage for current session's perception results"""
-    
+
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)
-        self.max_capacity = self.config.get('max_capacity', 100)
+        self.max_capacity = self.config.get('max_capacity', WorkingMemoryConfig.DEFAULT_MAX_CAPACITY)
         self._records: List[MemoryRecord] = []
         self._id_index: Dict[str, MemoryRecord] = {}
     

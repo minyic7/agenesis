@@ -11,20 +11,18 @@ class CognitionResult:
     """Result of cognitive processing"""
     intent: str  # question, request, statement, conversation
     context_type: str  # new, continuation, clarification, related
-    persistence_score: float  # 0.0-1.0
+    should_persist: bool  # whether this interaction should be stored in persistent memory
     summary: str  # brief description of what user wants
     relevant_memories: List[str]  # IDs of relevant memory records
-    confidence: float  # 0.0-1.0 confidence in the analysis
     reasoning: str  # explanation of the analysis
     timestamp: Optional[datetime] = None
-    
+
+    # Memory content organized by source
+    memory_context: Optional[Dict[str, Any]] = None
+
     def __post_init__(self):
         if self.timestamp is None:
             self.timestamp = datetime.now(timezone.utc)
-        
-        # Validate ranges
-        self.persistence_score = max(0.0, min(1.0, self.persistence_score))
-        self.confidence = max(0.0, min(1.0, self.confidence))
 
 
 class BaseCognition(ABC):

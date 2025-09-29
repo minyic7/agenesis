@@ -19,10 +19,9 @@ class TestSimplePatternLearning:
         result = CognitionResult(
             intent="question",
             context_type="new",
-            persistence_score=0.7,
+            should_persist=True,
             summary="Test question",
             relevant_memories=[],
-            confidence=0.8,
             reasoning="Test reasoning"
         )
         

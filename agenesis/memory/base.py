@@ -18,7 +18,6 @@ class MemoryRecord:
     # Evolution support
     is_evolved_knowledge: bool = False
     evolution_metadata: Optional[Dict[str, Any]] = None
-    reliability_multiplier: float = 1.0  # Higher for evolved knowledge
 
     # Semantic search support
     embedding: Optional[List[float]] = None  # OpenAI embedding for semantic search

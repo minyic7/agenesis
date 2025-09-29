@@ -153,7 +153,6 @@ class SQLiteMemory(BaseMemory):
                     metadata TEXT NOT NULL,
                     is_evolved_knowledge INTEGER DEFAULT 0,
                     evolution_metadata TEXT,
-                    reliability_multiplier REAL DEFAULT 1.0,
                     embedding TEXT,
                     agent_response TEXT
                 )
@@ -232,8 +231,8 @@ class SQLiteMemory(BaseMemory):
                 INSERT INTO memory_records
                 (id, content, input_type, perception_metadata, perception_features,
                  perception_timestamp, stored_at, context, metadata,
-                 is_evolved_knowledge, evolution_metadata, reliability_multiplier, embedding, agent_response)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 is_evolved_knowledge, evolution_metadata, embedding, agent_response)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 record.id,
                 record.perception_result.content,
@@ -246,7 +245,6 @@ class SQLiteMemory(BaseMemory):
                 json.dumps(record.metadata),
                 1 if record.is_evolved_knowledge else 0,
                 json.dumps(record.evolution_metadata) if record.evolution_metadata else None,
-                record.reliability_multiplier,
                 json.dumps(record.embedding) if record.embedding else None,
                 record.agent_response
             ))
@@ -319,7 +317,6 @@ class SQLiteMemory(BaseMemory):
             metadata=json.loads(row['metadata']),
             is_evolved_knowledge=bool(row['is_evolved_knowledge']),
             evolution_metadata=evolution_metadata,
-            reliability_multiplier=row['reliability_multiplier'],
             embedding=embedding,
             agent_response=row['agent_response']
         )

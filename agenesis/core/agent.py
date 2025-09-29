@@ -9,6 +9,19 @@ from ..evolution import EvolutionAnalyzer
 from ..persona import PersonaContext, BasePersona, load_persona
 
 
+# Agent Configuration Constants
+class AgentConfig:
+    """Constants for agent configuration to avoid magic numbers"""
+    # Project knowledge import
+    CONTENT_SUMMARY_LENGTH = 200  # Length for content summary truncation
+
+    # Evolution and memory
+    RECENT_MEMORIES_FOR_EVOLUTION = 3  # Recent memories to include in evolution
+
+    # Embedding initialization
+    EMBEDDING_BATCH_SIZE = 100  # Records to process in embedding batches
+
+
 class Agent:
     """Main Agent class with profile-based memory management"""
     
@@ -162,7 +175,7 @@ class Agent:
                 self.immediate_memory, self.working_memory, persona_context
             )
         
-        # 5. Action generation (with optional persona context)
+        # 5. Action generation (memory context provided by cognition)
         action_result = await self.action.generate_response(cognition_result, persona_context)
 
         # 6. Evolution analysis with full interaction context (if persistent memory available)
@@ -187,7 +200,7 @@ class Agent:
                     evolved_metadata = self.evolution.create_evolved_knowledge_metadata(evolution_decision)
 
                     # Create new enhanced memory records with complete interaction context
-                    recent_memories = self.working_memory.get_recent(3)
+                    recent_memories = self.working_memory.get_recent(AgentConfig.RECENT_MEMORIES_FOR_EVOLUTION)
                     for memory in recent_memories:
                         # Create new enhanced memory record for persistent storage
                         from ..memory.base import MemoryRecord
@@ -250,7 +263,7 @@ class Agent:
         """Import project documentation and knowledge into persistent memory
         
         Args:
-            knowledge_sources: List of dicts with 'content', 'type', 'importance', 'boost' keys
+            knowledge_sources: List of dicts with 'content', 'type', 'importance' keys
             
         Returns:
             Dict with import results
@@ -268,7 +281,6 @@ class Agent:
                 content = source.get('content', '')
                 doc_type = source.get('type', 'general')
                 importance = source.get('importance', 'medium')
-                reliability_boost = source.get('boost', 1.3)
                 
                 if not content.strip():
                     skipped_count += 1
@@ -283,7 +295,7 @@ class Agent:
                     'document_type': doc_type,
                     'importance': importance,
                     'imported_at': perception_result.timestamp.isoformat(),
-                    'content_summary': content[:200] + '...' if len(content) > 200 else content
+                    'content_summary': content[:AgentConfig.CONTENT_SUMMARY_LENGTH] + '...' if len(content) > AgentConfig.CONTENT_SUMMARY_LENGTH else content
                 }
                 
                 # Store in persistent memory
@@ -293,14 +305,13 @@ class Agent:
                 record = self.persistent_memory.retrieve(memory_id)
                 if record:
                     record.is_evolved_knowledge = True
-                    record.reliability_multiplier = reliability_boost
                     record.evolution_metadata = {
                         'knowledge_summary': f"{doc_type.title()} documentation",
                         'learning_context': 'project_documentation',
                         'future_relevance': f"Relevant for {doc_type} decisions and planning",
                         'imported_at': perception_result.timestamp.isoformat()
                     }
-                    
+
                     # Re-store the enhanced record
                     self.persistent_memory.store(record.perception_result, record.context)
                 
@@ -309,7 +320,6 @@ class Agent:
                     'type': doc_type,
                     'size': len(content),
                     'importance': importance,
-                    'boost': reliability_boost,
                     'memory_id': memory_id
                 })
                 
@@ -331,7 +341,7 @@ class Agent:
         """Convenience method to import project knowledge from files
         
         Args:
-            file_paths: List of file paths or dicts with 'path', 'type', 'importance', 'boost'
+            file_paths: List of file paths or dicts with 'path', 'type', 'importance'
             default_type: Default document type if not specified
             
         Returns:
@@ -346,13 +356,11 @@ class Agent:
                     file_path = file_spec
                     doc_type = default_type
                     importance = 'medium'
-                    boost = 1.3
                 else:
                     # Dict with specifications
                     file_path = file_spec['path']
                     doc_type = file_spec.get('type', default_type)
                     importance = file_spec.get('importance', 'medium')
-                    boost = file_spec.get('boost', 1.3)
                 
                 # Read file content
                 with open(file_path, 'r', encoding='utf-8') as f:
@@ -362,7 +370,6 @@ class Agent:
                     'content': content,
                     'type': doc_type,
                     'importance': importance,
-                    'boost': boost,
                     'source_file': file_path
                 })
                 
@@ -403,7 +410,7 @@ class Agent:
 
             # 2. Load recent 100 persistent memory records (should already have embeddings)
             if self.has_persistent_memory:
-                recent_persistent = self.persistent_memory.get_recent(100)
+                recent_persistent = self.persistent_memory.get_recent(AgentConfig.EMBEDDING_BATCH_SIZE)
                 records_without_embeddings = [r for r in recent_persistent if not r.embedding]
 
                 if records_without_embeddings:
