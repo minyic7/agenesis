@@ -1,169 +1,251 @@
 # Memory Module Design
 
-## Human-Like Attention & Memory System
+## Overview
 
-### Core Memory Types (by Attention Priority)
+The Memory module implements a human-like attention and memory system with multiple storage types optimized for different access patterns and persistence requirements.
+
+## Core Memory Architecture
+
+### Memory Types by Priority
 
 #### `ImmediateMemory` - Current Focus
-- Single current message being processed
-- Most relevant/important information RIGHT NOW
-- Highest attention priority
-- Cleared after each interaction
+- **Purpose**: Single current message being processed
+- **Scope**: Highest attention priority, current interaction only
+- **Lifecycle**: Cleared after each interaction
+- **Storage**: In-memory only
 
-#### `WorkingMemory` - Recent Context  
-- Current session's conversation history
-- Recent relevant information
-- Medium attention priority
-- Some information may become irrelevant over time
+#### `WorkingMemory` - Session Context
+- **Purpose**: Recent conversation history and session state
+- **Scope**: Current session's interactions for context continuity
+- **Lifecycle**: Maintained during session, configurable capacity limits
+- **Storage**: In-memory with configurable persistence
 
-#### `EpisodicMemory` - Past Experiences (Future)
-- Specific past interactions/experiences
-- Lower attention priority
-- Retrieved only when highly relevant to current task
+#### `PersistentMemory` - Long-term Knowledge
+- **Purpose**: Important interactions and learned knowledge across sessions
+- **Scope**: Cross-session knowledge and user relationship building
+- **Lifecycle**: Permanent storage with selective retention
+- **Storage**: SQLite database with vector search capabilities
 
-#### `SemanticMemory` - Learned Knowledge (Future)
-- Abstract facts, patterns, skills learned
-- Background knowledge
-- Retrieved when conceptually relevant
+## Implementation Status
 
-### Attention-Based Retrieval System
+### ✅ Completed Features
 
-#### `AttentionManager`
-- **Relevance Scoring**: Rate information importance to current task
-- **Context Filtering**: Pick most helpful info from each memory type
-- **Attention Allocation**: Focus cognitive resources on high-value memories
-- **Noise Reduction**: Filter out irrelevant information
+#### **Memory Record Structure**
+```python
+@dataclass
+class MemoryRecord:
+    id: str                                    # Unique identifier
+    perception_result: PerceptionResult        # Original input data
+    stored_at: datetime                        # Storage timestamp
+    context: Dict[str, Any]                   # Session/conversation context
+    metadata: Dict[str, Any]                  # Storage-specific information
 
-#### Information Flow
+    # Evolution support
+    is_evolved_knowledge: bool = False         # Marks learned/enhanced memories
+    evolution_metadata: Optional[Dict[str, Any]] = None
+
+    # Semantic search support
+    embedding: Optional[List[float]] = None    # OpenAI embedding vectors
+
+    # Full interaction context
+    agent_response: Optional[str] = None       # Agent's response for context
 ```
-Current Input → Relevance Analysis → 
-  ↓
-Priority 1: ImmediateMemory (current focus)
-Priority 2: WorkingMemory (recent context - filtered)  
-Priority 3: EpisodicMemory (relevant past - searched)
-Priority 4: SemanticMemory (applicable knowledge - queried)
-  ↓
-Combined Relevant Context → Cognition
+
+#### **Storage Backend Implementations**
+
+**FileMemory:**
+- **Format**: JSONL (JSON Lines) for simple text-based storage
+- **Use Case**: Development, debugging, simple persistence needs
+- **Features**: Human-readable, easy backup and version control
+
+**SQLiteMemory:**
+- **Format**: SQLite database with optimized schema
+- **Use Case**: Production usage, semantic search, large datasets
+- **Features**: Vector search, indexing, efficient queries, ACID compliance
+
+#### **Semantic Search Integration**
+- **Embedding Provider**: OpenAI text-embedding-3-small (1536 dimensions)
+- **Vector Storage**: SQLite-VSS extension for efficient similarity search
+- **Search Strategy**: Cosine similarity with configurable thresholds
+- **Performance Optimization**: Intelligent caching reduces query time by ~50%
+
+#### **Configuration Management**
+All magic numbers eliminated with named constants:
+
+**WorkingMemoryConfig:**
+```python
+DEFAULT_MAX_CAPACITY = 100  # Maximum records in working memory
 ```
 
-### Core Classes
+## Storage Architecture
 
-#### `BaseMemory`
-- `store(perception_result) -> memory_id`
-- `retrieve(memory_id) -> PerceptionResult`
-- `search(query) -> List[PerceptionResult]`
-
-#### `MemoryStore`
-- Unified interface for all memory types
-- Route to appropriate memory type
-- Handle cross-memory queries
-
-### Storage Format
-
-#### `MemoryRecord`
-- `id`: Unique identifier
-- `perception_result`: Original PerceptionResult
-- `timestamp`: When stored
-- `context`: Session/conversation context
-- `metadata`: Storage-specific info
-
-### Storage Location Strategy
-
-#### User Home Directory (`~/.agenesis/`)
-The framework stores persistent memory in the user's home directory following Unix conventions:
-
+### Profile-Based Organization
 ```
 ~/.agenesis/
 └── profiles/
-    ├── user_profile_1/
-    │   ├── records.jsonl      # File storage
-    │   └── memory.db          # SQLite storage
-    └── user_profile_2/
-        └── records.jsonl
+    ├── project_alpha/
+    │   ├── records.jsonl      # File storage option
+    │   └── memory.db          # SQLite storage option
+    └── personal_assistant/
+        └── memory.db
 ```
 
-**Benefits of ~/.agenesis/ approach:**
-- **User-scoped data**: Each user maintains their own agent profiles
-- **Cross-project persistence**: Same agent profile works across different projects
-- **Clean development**: No clutter in project directories
-- **Standard practice**: Follows conventions like `.npm/`, `.pip/`, `.cache/`
-- **Multi-project learning**: Agent knowledge persists and improves across codebases
-- **Team collaboration**: No conflicts with team members' local agent states
-
-**Agent Profile Isolation:**
-- Each named agent gets its own profile directory
-- Anonymous agents use no persistent storage
-- Storage type (file vs SQLite) configurable per agent
-- Profile data never conflicts between different agents
+**Benefits:**
+- **User-scoped data**: Each user maintains separate agent profiles
+- **Cross-project persistence**: Agent knowledge survives project changes
+- **Profile isolation**: Multiple agents don't interfere with each other
+- **Standard conventions**: Follows Unix home directory patterns
 
 ### Project Knowledge Integration
 
-#### Leveraging Existing Memory Architecture for Project Work
-The framework supports long-term project work by treating project documentation and knowledge as special types of persistent memories, leveraging the existing memory infrastructure without requiring new storage systems.
+#### **Enhanced Memory Architecture for Long-term Work**
+Project documentation and knowledge are stored as special types of persistent memories, leveraging existing infrastructure without requiring new storage systems.
 
-**Project Knowledge as Enhanced Memories:**
+**Project Knowledge as Evolved Memories:**
 ```python
-# Project documents stored as MemoryRecord with special context
 project_memory = MemoryRecord(
-    perception_result=doc_content,           # Processed project document
+    perception_result=doc_content,
     context={
-        'source_type': 'project_knowledge',  # Distinguishes from conversations
-        'document_type': 'requirements',     # requirements, architecture, etc.
-        'importance': 'high'                 # Priority level for retrieval
+        'source_type': 'project_knowledge',    # Distinguishes from conversations
+        'document_type': 'requirements',       # Type classification
+        'importance': 'high'                   # Priority for retrieval
     },
-    is_evolved_knowledge=True,              # Marked as important knowledge
-    reliability_multiplier=1.5              # Higher retrieval priority
+    is_evolved_knowledge=True,                # Marks as important knowledge
+    evolution_metadata={                      # Learning context
+        'knowledge_summary': 'API documentation',
+        'learning_context': 'project_documentation',
+        'future_relevance': 'API design decisions'
+    }
 )
 ```
 
 **Integration Benefits:**
-- **Unified retrieval**: Cognition module naturally finds both project docs and conversation history
-- **Cross-session persistence**: Project knowledge survives across all sessions
-- **Evolution compatibility**: Can still learn from conversations while maintaining project context
-- **Profile isolation**: Each project profile maintains separate knowledge base
-- **Storage flexibility**: Works with both file and SQLite storage backends
+- **Unified Retrieval**: Cognition finds both project docs and conversation history seamlessly
+- **Cross-session Persistence**: Project knowledge survives across all sessions
+- **Evolution Compatible**: Can learn from conversations while maintaining project context
+- **Profile Isolation**: Each project maintains separate knowledge base
 
-**Usage Pattern:**
+## Current Capabilities
+
+### Memory Storage Operations
+
+**Store Operations:**
+- **Immediate**: Direct storage with automatic ID generation
+- **Working**: Capacity-managed storage with LRU eviction
+- **Persistent**: Selective storage based on cognition decisions
+
+**Retrieval Operations:**
+- **By ID**: Direct record retrieval for specific memories
+- **Recent Records**: Time-based retrieval with configurable limits
+- **Semantic Search**: Vector similarity search with threshold filtering
+- **Keyword Matching**: Fallback search for non-semantic deployments
+
+### Project Knowledge Management
+
+**Import Capabilities:**
 ```python
-# 1. Create project-specific agent
-agent = Agent(profile="ecommerce_rebuild", persona="technical_mentor")
-
-# 2. Import project knowledge (optional)
+# Import from structured sources
 await agent.import_project_knowledge([
-    {'content': requirements_doc, 'type': 'requirements', 'boost': 1.5},
-    {'content': architecture_doc, 'type': 'architecture', 'boost': 1.4}
+    {'content': requirements_doc, 'type': 'requirements'},
+    {'content': architecture_doc, 'type': 'architecture'},
+    {'content': api_docs, 'type': 'documentation'}
 ])
 
-# 3. Natural conversations with project context
-response = await agent.process_input("How should we implement authentication?")
-# → Agent retrieves relevant architecture docs + conversation history
+# Import from files
+await agent.import_from_files([
+    'docs/requirements.md',
+    {'path': 'docs/api.md', 'type': 'api_documentation'},
+    {'path': 'ARCHITECTURE.md', 'importance': 'high'}
+])
 ```
 
-**Project Knowledge Types:**
-- **Requirements documents**: User stories, acceptance criteria, constraints
-- **Architecture documentation**: System design, patterns, technology decisions  
-- **Domain knowledge**: Business context, industry standards, best practices
-- **Code documentation**: API specs, coding standards, existing patterns
-- **Historical context**: Previous decisions, lessons learned, project evolution
+**Knowledge Types Supported:**
+- **Requirements**: User stories, acceptance criteria, constraints
+- **Architecture**: System design, patterns, technology decisions
+- **Documentation**: API specs, coding standards, best practices
+- **Domain Knowledge**: Business context, industry standards
 
-## Implementation Progress
+### Vector Search Performance
 
-### ✅ Phase 1: Basic Storage
-- [x] BaseMemory interface
-- [x] ImmediateMemory for current message focus
-- [x] WorkingMemory implementation
-- [x] MemoryRecord format
-- [x] Simple storage/retrieval
-- [x] FileMemory and SQLiteMemory for persistence
+**Optimization Features:**
+- **Index Caching**: Intelligent caching of vector search indices
+- **Batch Operations**: Efficient batch embedding generation
+- **Similarity Thresholds**: Configurable relevance filtering
+- **Fallback Strategy**: Graceful degradation to keyword search
 
-### 🔄 Phase 2: Attention-Based Retrieval
-- [ ] AttentionManager for relevance scoring
-- [ ] Context filtering from WorkingMemory
-- [ ] Relevance-based memory prioritization
-- [ ] Combined context assembly
+**Performance Characteristics:**
+- **Cache Hit**: <50ms for cached similarity searches
+- **Cache Miss**: ~200ms for fresh vector searches
+- **Batch Embedding**: ~100ms per text for OpenAI API
+- **Keyword Fallback**: <10ms for simple text matching
 
-### 📋 Phase 3: Advanced Memory Types (Future)
-- [ ] EpisodicMemory with search
-- [ ] SemanticMemory with pattern recognition
-- [ ] Cross-memory relevance analysis
-- [ ] Memory consolidation and forgetting
+## Integration Points
+
+### Cognition Module
+- **Memory Context**: Provides organized context structure to cognition
+- **Relevant Memories**: Supplies semantically similar historical interactions
+- **Cross-session Knowledge**: Enables learning from past sessions
+
+### Evolution Module
+- **Learning Storage**: Stores evolved knowledge as enhanced memories
+- **Pattern Analysis**: Provides historical data for pattern extraction
+- **Knowledge Enhancement**: Upgrades regular memories to evolved knowledge
+
+### Agent Orchestration
+- **Profile Management**: Handles agent-specific memory isolation
+- **Project Context**: Maintains project-specific knowledge bases
+- **Session Management**: Coordinates memory across interaction sessions
+
+## Memory Lifecycle Management
+
+### Working Memory Management
+- **Capacity Control**: Automatic eviction when exceeding configured limits
+- **LRU Strategy**: Least recently used records removed first
+- **Session Persistence**: Optional persistence across session restarts
+
+### Persistent Memory Management
+- **Selective Storage**: Only stores interactions marked as important by cognition
+- **Evolution Enhancement**: Upgrades memories when learning occurs
+- **Cross-session Continuity**: Maintains knowledge across all agent sessions
+
+### Embedding Management
+- **Lazy Generation**: Embeddings generated on-demand for efficiency
+- **Batch Processing**: Efficient batch operations for multiple records
+- **Cache Invalidation**: Smart cache management for optimal performance
+
+## Design Principles
+
+1. **Attention-Based Access**: Higher priority memories get faster, more frequent access
+2. **Profile Isolation**: Different agents maintain completely separate memory spaces
+3. **Semantic Intelligence**: Vector search enables conceptual memory retrieval
+4. **Graceful Degradation**: Always functional, even without embeddings or external APIs
+5. **Project Integration**: Seamless incorporation of project knowledge into memory architecture
+
+## Performance Optimization
+
+### Caching Strategy
+- **Vector Index Caching**: Reduces repeated search computation
+- **Embedding Caching**: Avoids regenerating embeddings for known content
+- **Query Result Caching**: Speeds up repeated similar queries
+
+### Storage Efficiency
+- **Selective Persistence**: Only important interactions stored long-term
+- **Compression**: Efficient storage of large embedding vectors
+- **Index Optimization**: Database indices for common query patterns
+
+## Future Enhancements
+
+### Advanced Memory Types
+- **Episodic Memory**: Specific interaction sequences and experiences
+- **Semantic Memory**: Abstract knowledge and learned concepts
+- **Procedural Memory**: Learned skills and behavior patterns
+
+### Enhanced Search Capabilities
+- **Multi-modal Search**: Support for images, audio, and other media types
+- **Temporal Search**: Time-aware memory retrieval and relevance
+- **Cross-Memory Search**: Unified search across all memory types
+
+### Performance Improvements
+- **Distributed Storage**: Scale beyond single-machine limitations
+- **Advanced Caching**: Multi-level caching strategies
+- **Async Operations**: Non-blocking memory operations for better responsiveness

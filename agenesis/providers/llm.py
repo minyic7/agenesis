@@ -34,10 +34,6 @@ class BaseLLMProvider(ABC):
         """Generate text completion"""
         pass
     
-    @abstractmethod
-    async def score(self, prompt: str, **kwargs) -> float:
-        """Return numerical score (0.0-1.0)"""
-        pass
     
     @abstractmethod
     async def classify(self, prompt: str, options: List[str], **kwargs) -> str:
@@ -85,15 +81,6 @@ class OpenAIProvider(BaseLLMProvider):
                     raise Exception(f"OpenAI API failed after {self.config.max_retries} attempts: {e}")
                 await asyncio.sleep(2 ** attempt)  # Exponential backoff
     
-    async def score(self, prompt: str, **kwargs) -> float:
-        """Return numerical score using OpenAI API"""
-        scoring_prompt = f"{prompt}\n\nRespond with only a number between 0.0 and 1.0:"
-        
-        response = await self.complete(scoring_prompt, temperature=0.0, max_tokens=10)
-        # Extract number from response
-        score_str = ''.join(c for c in response if c.isdigit() or c == '.')
-        score = float(score_str)
-        return max(0.0, min(1.0, score))  # Clamp to valid range
     
     async def classify(self, prompt: str, options: List[str], **kwargs) -> str:
         """Return one of the provided options"""
@@ -151,15 +138,6 @@ class AnthropicProvider(BaseLLMProvider):
                     raise Exception(f"Anthropic API failed after {self.config.max_retries} attempts: {e}")
                 await asyncio.sleep(2 ** attempt)  # Exponential backoff
     
-    async def score(self, prompt: str, **kwargs) -> float:
-        """Return numerical score using Anthropic API"""
-        scoring_prompt = f"{prompt}\n\nRespond with only a number between 0.0 and 1.0:"
-        
-        response = await self.complete(scoring_prompt, temperature=0.0, max_tokens=10)
-        # Extract number from response
-        score_str = ''.join(c for c in response if c.isdigit() or c == '.')
-        score = float(score_str)
-        return max(0.0, min(1.0, score))  # Clamp to valid range
     
     async def classify(self, prompt: str, options: List[str], **kwargs) -> str:
         """Return one of the provided options"""
